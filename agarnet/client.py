@@ -84,7 +84,7 @@ class Client(object):
         self.server_token = token
         self.ingame = False
 
-        self.ws.settimeout(1)
+        self.ws.settimeout(5)
         self.ws.connect('ws://%s' % self.address, origin='http://agar.io')
         if not self.connected:
             self.subscriber.on_connect_error(
@@ -147,8 +147,8 @@ class Client(object):
         parser = getattr(self, 'parse_%s' % packet_name)
         try:
             parser(buf)
-            assert len(buf.buffer) == 0, \
-                'Buffer not empty after parsing "%s" packet' % packet_name
+            if len(buf.buffer) != 0:
+                print('Buffer not empty after parsing "%s" packet. Buffer content: %s' % (packet_name, buf))
         except BufferUnderflowError as e:
             msg = 'Parsing %s packet failed: %s' % (packet_name, e.args[0])
             self.subscriber.on_message_error(msg)
