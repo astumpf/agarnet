@@ -23,7 +23,7 @@ class Cell(object):
 
         # lerp smoothing
         diff = self.size - self.draw_size
-        if diff > 1:
+        if diff > 0.5:
             self.draw_size += diff * 0.25
         else:
             self.draw_size = self.size
