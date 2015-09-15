@@ -258,8 +258,13 @@ class Client(object):
         top = buf.pop_float64()
         right = buf.pop_float64()
         bottom = buf.pop_float64()
-        self.subscriber.on_world_rect(
-            left=left, top=top, right=right, bottom=bottom)
+        server_msg = str()
+
+        if len(buf.buffer) != 0:
+            buf.pop_uint32()
+            server_msg = buf.pop_str16()
+
+        self.subscriber.on_world_rect(left=left, top=top, right=right, bottom=bottom, server_msg=server_msg)
         self.world.top_left = Vec(top, left)
         self.world.bottom_right = Vec(bottom, right)
         self.player.center = self.world.center
