@@ -4,6 +4,7 @@ from .vec import Vec
 class Cell(object):
     def __init__(self, *args, **kwargs):
         self.pos = Vec()
+        self.draw_size = 0
         self.update(*args, **kwargs)
 
     def update(self, cid=-1, x=0, y=0, size=0, name='',
@@ -16,6 +17,16 @@ class Cell(object):
         self.color = tuple(map(lambda rgb: rgb / 255.0, color))
         self.is_virus = is_virus
         self.is_agitated = is_agitated
+
+        if not self.draw_size:
+            self.draw_size = self.size
+
+        # lerp smoothing
+        diff = self.size - self.draw_size
+        if diff > 1:
+            self.draw_size += diff * 0.25
+        else:
+            self.draw_size = self.size
 
     @property
     def is_food(self):
