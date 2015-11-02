@@ -23,8 +23,9 @@ packet_c2s = {
     1: 'spectate',
     16: 'target',
     17: 'split',
-    18: 'shoot',
+    18: 'spectate_toggle',
     20: 'explode',
+    21: 'shoot',
     80: 'token',
     81: 'facebook',
     254: 'handshake1',
@@ -35,7 +36,7 @@ ingame_packets = ('world_rect', 'world_update', 'leaderboard_names',
                   'leaderboard_groups', 'spectate_update', 'own_id')
 
 
-handshake_version = 154669603
+handshake_version = 2200049715
 
 
 class Client(object):
@@ -84,7 +85,7 @@ class Client(object):
         self.server_token = token
         self.ingame = False
 
-        self.ws.settimeout(5)
+        self.ws.settimeout(1)
         self.ws.connect('ws://%s' % self.address, origin='http://agar.io')
         if not self.connected:
             self.subscriber.on_connect_error(
@@ -147,12 +148,12 @@ class Client(object):
         parser = getattr(self, 'parse_%s' % packet_name)
         try:
             parser(buf)
-            if len(buf.buffer) != 0:
-                print('Buffer not empty after parsing "%s" packet. Buffer content: %s' % (packet_name, buf))
         except BufferUnderflowError as e:
             msg = 'Parsing %s packet failed: %s' % (packet_name, e.args[0])
             self.subscriber.on_message_error(msg)
-            raise e
+        if len(buf.buffer) != 0:
+            msg = 'Buffer not empty after parsing "%s" packet' % packet_name
+            self.subscriber.on_message_error(msg)
         return True
 
     def parse_world_update(self, buf):
@@ -258,16 +259,16 @@ class Client(object):
         top = buf.pop_float64()
         right = buf.pop_float64()
         bottom = buf.pop_float64()
-        server_msg = str()
-
-        if len(buf.buffer) != 0:
-            buf.pop_uint32()
-            server_msg = buf.pop_str16()
-
-        self.subscriber.on_world_rect(left=left, top=top, right=right, bottom=bottom, server_msg=server_msg)
+        self.subscriber.on_world_rect(
+            left=left, top=top, right=right, bottom=bottom)
         self.world.top_left = Vec(top, left)
         self.world.bottom_right = Vec(bottom, right)
         self.player.center = self.world.center
+
+        if buf.buffer:
+            number = buf.pop_uint32()
+            text = buf.pop_str16()
+            self.subscriber.on_server_version(number=number, text=text)
 
     def parse_spectate_update(self, buf):
         # only in spectate mode
@@ -331,6 +332,9 @@ class Client(object):
 
     def send_spectate(self):
         self.send_struct('<B', 1)
+
+    def send_spectate_toggle(self):
+        self.send_struct('<B', 18)
 
     def send_split(self):
         self.send_struct('<B', 17)
