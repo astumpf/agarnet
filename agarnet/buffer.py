@@ -11,8 +11,10 @@ class BufferUnderflowError(struct.error):
 
 
 class BufferStruct(object):
-    def __init__(self, message):
+    def __init__(self, message=bytes(), opcode=None):
         self.buffer = message
+        if opcode is not None:
+            self.push_uint8(opcode)
 
     def __str__(self):
         specials = {
@@ -39,6 +41,47 @@ class BufferStruct(object):
                     hex_seen = True
                 nice_bytes.append('%02x' % b)
         return ''.join(nice_bytes)
+
+    def append(self, buf):
+        self.buffer += buf.buffer
+
+    def push_int8(self, value):
+        self.buffer += struct.pack('<b', value)
+
+    def push_uint8(self, value):
+        self.buffer += struct.pack('<B', value)
+
+    def push_int16(self, value):
+        self.buffer += struct.pack('<h', value)
+
+    def push_uint16(self, value):
+        self.buffer += struct.pack('<H', value)
+
+    def push_int32(self, value):
+        self.buffer += struct.pack('<i', value)
+
+    def push_uint32(self, value):
+        self.buffer += struct.pack('<I', value)
+
+    def push_float32(self, value):
+        self.buffer += struct.pack('<f', value)
+
+    def push_float64(self, value):
+        self.buffer += struct.pack('<d', value)
+
+    def push_end_str16(self, value):
+        for c in value:
+            self.push_uint16(ord(c))
+
+    def push_end_str8(self, value):
+        for c in value:
+            self.push_uint8(ord(c))
+
+    def push_null_str16(self, value):
+        self.push_end_str16(value + "0")
+
+    def push_null_str8(self, value):
+        self.push_end_str8(value + "0")
 
     def pop_values(self, fmt):
         size = struct.calcsize(fmt)

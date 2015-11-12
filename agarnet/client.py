@@ -16,6 +16,7 @@ packet_s2c = {
     50: 'leaderboard_groups',
     64: 'world_rect',
     81: 'experience_info',
+    101: 'world_update_team'
 }
 
 packet_c2s = {
@@ -156,7 +157,9 @@ class Client(object):
             self.subscriber.on_message_error(msg)
         return True
 
-    def parse_world_update(self, buf):
+    def parse_world_update(self, buf, is_team_update=False):
+        if not is_team_update:
+            self.subscriber.on_world_update_msg(buf)
         self.subscriber.on_world_update_pre()
 
         # we keep the previous world state, so
@@ -204,7 +207,7 @@ class Client(object):
                 self.world.create_cell(cid)
             cells[cid].update(
                 cid=cid, x=cx, y=cy, size=csize, name=cname, color=color,
-                is_virus=is_virus, is_agitated=is_agitated)
+                is_virus=is_virus, is_agitated=is_agitated, is_team_update=is_team_update)
 
         # also keep these non-updated cells
         for i in range(buf.pop_uint32()):
@@ -218,6 +221,9 @@ class Client(object):
         self.player.cells_changed()
 
         self.subscriber.on_world_update_post()
+
+    def parse_world_update_team(self, buf):
+        self.parse_world_update(self, buf, True)
 
     def parse_leaderboard_names(self, buf):
         # sent every 500ms
@@ -308,43 +314,60 @@ class Client(object):
     # f float32
     # d float64
 
-    def send_struct(self, fmt, *data):
+    def send_buffer(self, buf):
         if self.connected:
-            self.ws.send(struct.pack(fmt, *data))
+            self.ws.send(buf.buffer)
+
+    def send_opcode(self, opcode):
+        self.send_buffer(BufferStruct(opcode=opcode))
 
     def send_handshake(self):
-        self.send_struct('<BI', 254, 5)
-        self.send_struct('<BI', 255, handshake_version)
+        buf = BufferStruct(opcode=254)
+        buf.push_uint32(5)
+        self.send_buffer(buf)
+
+        buf = BufferStruct(opcode=255)
+        buf.push_uint32(handshake_version)
+        self.send_buffer(buf)
 
     def send_token(self, token):
-        self.send_struct('<B%iB' % len(token), 80, *map(ord, token))
+        buf = BufferStruct(opcode=80)
+        buf.push_end_str8(token)
+        self.send_buffer(buf)
         self.server_token = token
 
     def send_facebook(self, token):
-        self.send_struct('<B%iB' % len(token), 81, *map(ord, token))
+        buf = BufferStruct(opcode=81)
+        buf.push_end_str8(token)
+        self.send_buffer(buf)
         self.facebook_token = token
 
     def send_respawn(self):
-        nick = self.player.nick
-        self.send_struct('<B%iH' % len(nick), 0, *map(ord, nick))
+        buf = BufferStruct(opcode=0)
+        buf.push_end_str16(self.player.nick)
+        self.send_buffer(buf)
 
     def send_target(self, x, y, cid=0):
-        self.send_struct('<BiiI', 16, int(x), int(y), cid)
+        buf = BufferStruct(opcode=16)
+        buf.push_int32(int(x))
+        buf.push_int32(int(y))
+        buf.push_uint32(cid)
+        self.send_buffer(buf)
 
     def send_spectate(self):
-        self.send_struct('<B', 1)
+        self.send_opcode(1)
 
     def send_spectate_toggle(self):
-        self.send_struct('<B', 18)
+        self.send_opcode(18)
 
     def send_split(self):
-        self.send_struct('<B', 17)
+        self.send_opcode(17)
 
     def send_shoot(self):
-        self.send_struct('<B', 21)
+        self.send_opcode(21)
 
     def send_explode(self):
-        self.send_struct('<B', 20)
+        self.send_opcode(20)
         self.player.own_ids.clear()
         self.player.cells_changed()
         self.ingame = False
