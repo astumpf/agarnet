@@ -78,10 +78,12 @@ class BufferStruct(object):
             self.push_uint8(ord(c))
 
     def push_null_str16(self, value):
-        self.push_end_str16(value + "0")
+        self.push_end_str16(value)
+        self.push_uint16(0)
 
     def push_null_str8(self, value):
-        self.push_end_str8(value + "0")
+        self.push_end_str8(value)
+        self.push_uint8(0)
 
     def pop_values(self, fmt):
         size = struct.calcsize(fmt)

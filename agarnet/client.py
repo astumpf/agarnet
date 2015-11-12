@@ -127,15 +127,18 @@ class Client(object):
                 self.subscriber.on_sock_error()
         self.disconnect()
 
-    def on_message(self):
-        try:
-            msg = self.ws.recv()
-        except Exception:
-            self.disconnect()
-            return False
+    def on_message(self, msg=None):
+        if msg is None:
+            try:
+                msg = self.ws.recv()
+            except Exception:
+                self.disconnect()
+                return False
+
         if not msg:
             self.subscriber.on_message_error('Empty message received')
             return False
+
         buf = BufferStruct(msg)
         opcode = buf.pop_uint8()
         try:
@@ -223,7 +226,7 @@ class Client(object):
         self.subscriber.on_world_update_post()
 
     def parse_world_update_team(self, buf):
-        self.parse_world_update(self, buf, True)
+        self.parse_world_update(buf, True)
 
     def parse_leaderboard_names(self, buf):
         # sent every 500ms
