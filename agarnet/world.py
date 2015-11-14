@@ -8,7 +8,7 @@ class Cell(object):
         self.update(*args, **kwargs)
 
     def update(self, cid=-1, x=0, y=0, size=0, name='',
-               color=(1, 0, 1), is_virus=False, is_agitated=False, is_team_update=False):
+               color=(1, 0, 1), is_virus=False, is_agitated=False):
         self.cid = cid
         self.pos.set(x, y)
         self.size = size
@@ -20,9 +20,6 @@ class Cell(object):
 
         if not self.draw_size:
             self.draw_size = self.size
-
-        if is_team_update:
-            return
 
         # lerp smoothing
         diff = self.size - self.draw_size

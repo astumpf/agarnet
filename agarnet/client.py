@@ -16,7 +16,6 @@ packet_s2c = {
     50: 'leaderboard_groups',
     64: 'world_rect',
     81: 'experience_info',
-    101: 'world_update_team'
 }
 
 packet_c2s = {
@@ -127,17 +126,17 @@ class Client(object):
                 self.subscriber.on_sock_error()
         self.disconnect()
 
-    def on_message(self, msg=None):
-        if msg is None:
-            try:
-                msg = self.ws.recv()
-            except Exception:
-                self.disconnect()
-                return False
-
+    def on_message(self):
+        try:
+            msg = self.ws.recv()
+        except Exception:
+            self.disconnect()
+            return False
         if not msg:
             self.subscriber.on_message_error('Empty message received')
             return False
+
+        self.subscriber.on_message(msg)
 
         buf = BufferStruct(msg)
         opcode = buf.pop_uint8()
@@ -160,9 +159,7 @@ class Client(object):
             self.subscriber.on_message_error(msg)
         return True
 
-    def parse_world_update(self, buf, is_team_update=False):
-        if not is_team_update:
-            self.subscriber.on_world_update_msg(buf)
+    def parse_world_update(self, buf):
         self.subscriber.on_world_update_pre()
 
         # we keep the previous world state, so
@@ -199,10 +196,10 @@ class Client(object):
             if bitmask & 2:  # skip 4 bytes
                 buf.pop_uint32()
             if bitmask & 4:  # skin URL
-                skin_url = buf.pop_str8()
+                skin_url = buf.pop_null_str8()
                 if skin_url[0] is not ":":
                     skin_url = ""
-            cname = buf.pop_str16()
+            cname = buf.pop_null_str16()
             self.subscriber.on_cell_info(
                 cid=cid, x=cx, y=cy, size=csize, name=cname, color=color,
                 is_virus=is_virus, is_agitated=is_agitated)
@@ -210,7 +207,7 @@ class Client(object):
                 self.world.create_cell(cid)
             cells[cid].update(
                 cid=cid, x=cx, y=cy, size=csize, name=cname, color=color,
-                is_virus=is_virus, is_agitated=is_agitated, is_team_update=is_team_update)
+                is_virus=is_virus, is_agitated=is_agitated)
 
         # also keep these non-updated cells
         for i in range(buf.pop_uint32()):
@@ -225,9 +222,6 @@ class Client(object):
 
         self.subscriber.on_world_update_post()
 
-    def parse_world_update_team(self, buf):
-        self.parse_world_update(buf, True)
-
     def parse_leaderboard_names(self, buf):
         # sent every 500ms
         # not in "teams" mode
@@ -235,7 +229,7 @@ class Client(object):
         leaderboard_names = []
         for i in range(n):
             l_id = buf.pop_uint32()
-            l_name = buf.pop_str16()
+            l_name = buf.pop_null_str16()
             leaderboard_names.append((l_id, l_name))
         self.subscriber.on_leaderboard_names(leaderboard=leaderboard_names)
         self.player.world.leaderboard_names = leaderboard_names
@@ -277,7 +271,7 @@ class Client(object):
 
         if buf.buffer:
             number = buf.pop_uint32()
-            text = buf.pop_str16()
+            text = buf.pop_null_str16()
             self.subscriber.on_server_version(number=number, text=text)
 
     def parse_spectate_update(self, buf):
