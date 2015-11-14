@@ -88,6 +88,14 @@ class BufferStruct(object):
         self.push_end_str8(value)
         self.push_uint8(0)
 
+    def push_len_str16(self, value):
+        self.push_uint32(len(value))
+        self.push_end_str16(value)
+
+    def push_len_str8(self, value):
+        self.push_uint32(len(value))
+        self.push_end_str8(value)
+
     def pop_values(self, fmt):
         size = struct.calcsize(fmt)
         if len(self.buffer) < size:
@@ -124,19 +132,33 @@ class BufferStruct(object):
         return self.pop_values('<d')[0]
 
     def pop_null_str16(self):
-        l_name = []
+        string = []
         while 1:
             c = self.pop_uint16()
             if c == 0:
                 break
-            l_name.append(chr(c))
-        return ''.join(l_name)
+            string.append(chr(c))
+        return ''.join(string)
 
     def pop_null_str8(self):
-        l_name = []
+        string = []
         while 1:
             c = self.pop_uint8()
             if c == 0:
                 break
-            l_name.append(chr(c))
-        return ''.join(l_name)
+            string.append(chr(c))
+        return ''.join(string)
+
+    def pop_len_str16(self):
+        string_len = self.pop_uint32()
+        string = []
+        for i in range(0, string_len):
+            string.append(chr(self.pop_uint16()))
+        return ''.join(string)
+
+    def pop_len_str8(self):
+        string_len = self.pop_uint32()
+        string = []
+        for i in range(0, string_len):
+            string.append(chr(self.pop_uint8()))
+        return ''.join(string)
