@@ -45,6 +45,9 @@ class BufferStruct(object):
     def append(self, buf):
         self.buffer += buf.buffer
 
+    def push_bool(self, value):
+        self.push_uint8(1 if value else 0)
+
     def push_int8(self, value):
         self.buffer += struct.pack('<b', value)
 
@@ -93,6 +96,9 @@ class BufferStruct(object):
         self.buffer = self.buffer[size:]
         return values
 
+    def pop_bool(self):
+        return self.pop_uint8() > 0
+
     def pop_int8(self):
         return self.pop_values('<b')[0]
 
@@ -117,7 +123,7 @@ class BufferStruct(object):
     def pop_float64(self):
         return self.pop_values('<d')[0]
 
-    def pop_str16(self):
+    def pop_null_str16(self):
         l_name = []
         while 1:
             c = self.pop_uint16()
@@ -126,7 +132,7 @@ class BufferStruct(object):
             l_name.append(chr(c))
         return ''.join(l_name)
 
-    def pop_str8(self):
+    def pop_null_str8(self):
         l_name = []
         while 1:
             c = self.pop_uint8()
