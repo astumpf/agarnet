@@ -42,8 +42,12 @@ class BufferStruct(object):
                 nice_bytes.append('%02x' % b)
         return ''.join(nice_bytes)
 
+    def __add__(self, other):
+        return self.append(other)
+
     def append(self, buf):
         self.buffer += buf.buffer
+        return self
 
     def push_bool(self, value):
         self.push_uint8(1 if value else 0)

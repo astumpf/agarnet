@@ -18,6 +18,9 @@ class Dispatcher:
 
         parser = getattr(self.handler, 'parse_%s' % packet_name)
 
+        if parser is None:
+            return False
+
         try:
             parser(buf)
         except BufferUnderflowError as e:
