@@ -1,27 +1,28 @@
 from .vec import Vec
+from copy import copy
 
 
 class Cell(object):
     def __init__(self, *args, **kwargs):
         self.cid = -1
         self.pos = Vec()
-        self.size = 0
-        self.mass = 0
-        self.draw_size = 0
+        self.size = 0.0
+        self.mass = 0.0
+        self.draw_size = 0.0
         self.name = ''
         self.update(*args, **kwargs)
 
     def update(self, cid=-1, x=0, y=0, size=0, name='',
                color=(1, 0, 1), is_virus=False, is_agitated=False, cell=None):
         if cell:
-            self.cid = cell.cid
-            self.pos = cell.pos
-            self.size = cell.size
+            self.cid = copy(cell.cid)
+            self.pos.set(cell.pos.x, cell.pos.y)
+            self.size = copy(cell.size)
             self.mass = cell.size ** 2 / 100.0
-            self.name = cell.name
-            self.color = cell.color
-            self.is_virus = cell.is_virus
-            self.is_agitated = cell.is_agitated
+            self.name = copy(cell.name)
+            self.color = copy(cell.color)
+            self.is_virus = copy(cell.is_virus)
+            self.is_agitated = copy(cell.is_agitated)
         else:
             self.cid = cid
             self.pos.set(x, y)
