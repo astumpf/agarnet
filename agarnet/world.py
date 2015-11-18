@@ -38,12 +38,13 @@ class Cell(object):
         if self.cid < 0:
             return
 
-        if not self.draw_size:
-            self.draw_size = self.size
-
         if self.is_virus or self.is_agitated or self.is_food or self.is_ejected_mass:
+            self.draw_size = self.size
             self.draw_alpha = 1.0
             return
+
+        if not self.draw_size:
+            self.draw_size = max(self.size * 0.5, 20)
 
         # lerp smoothing
         diff = self.size - self.draw_size
