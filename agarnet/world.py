@@ -1,5 +1,6 @@
-from .vec import Vec
+from time import time
 from copy import copy
+from .vec import Vec
 
 
 class Cell(object):
@@ -11,6 +12,7 @@ class Cell(object):
         self.draw_size = 0.0
         self.draw_alpha = 0.1
         self.name = ''
+        self.spawn_time = time()
         self.update(*args, **kwargs)
 
     def update(self, cid=-1, x=0, y=0, size=0, name='',
