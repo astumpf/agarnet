@@ -9,6 +9,7 @@ class Cell(object):
         self.size = 0.0
         self.mass = 0.0
         self.draw_size = 0.0
+        self.draw_alpha = 0.1
         self.name = ''
         self.update(*args, **kwargs)
 
@@ -33,15 +34,30 @@ class Cell(object):
             self.is_virus = is_virus
             self.is_agitated = is_agitated
 
+        # TODO: this update calculations are only called by new packets, but should be rather down by ui refresh
+        if self.cid < 0:
+            return
+
         if not self.draw_size:
             self.draw_size = self.size
+
+        if self.is_virus or self.is_agitated or self.is_food or self.is_ejected_mass:
+            self.draw_alpha = 1.0
+            return
 
         # lerp smoothing
         diff = self.size - self.draw_size
         if diff > 0.5:
-            self.draw_size += diff * 0.25
+            self.draw_size += diff * 0.2
         else:
             self.draw_size = self.size
+
+        # lerp smoothing
+        diff = 1.0 - self.draw_alpha
+        if diff > 0.1:
+            self.draw_alpha += diff * 0.15
+        else:
+            self.draw_alpha = 1.0
 
     @property
     def is_food(self):
