@@ -135,9 +135,6 @@ class Client(object):
         if not msg:
             self.subscriber.on_message_error('Empty message received')
             return False
-
-        self.subscriber.on_message(msg)
-
         buf = BufferStruct(msg)
         opcode = buf.pop_uint8()
         try:
@@ -193,12 +190,16 @@ class Client(object):
             bitmask = buf.pop_uint8()
             is_virus = bool(bitmask & 1)
             is_agitated = bool(bitmask & 16)
-            if bitmask & 2:  # skip 4 bytes
-                buf.pop_uint32()
+            if bitmask & 2:  # skip padding
+                for i in range(buf.pop_uint32()):
+                    buf.pop_uint8()
             if bitmask & 4:  # skin URL
                 skin_url = buf.pop_null_str8()
-                if skin_url[0] is not ":":
-                    skin_url = ""
+                if skin_url[0] is not ':':
+                    skin_url = ''
+            else:  # no skin URL given
+                skin_url = ''
+
             cname = buf.pop_null_str16()
             self.subscriber.on_cell_info(
                 cid=cid, x=cx, y=cy, size=csize, name=cname, color=color,
