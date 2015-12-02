@@ -45,6 +45,9 @@ class BufferStruct(object):
     def __add__(self, other):
         return self.append(other)
 
+    def empty(self):
+        return len(self.buffer) == 0
+
     def append(self, buf):
         self.buffer += buf.buffer
         return self
