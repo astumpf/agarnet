@@ -195,8 +195,6 @@ class Client(object):
                     buf.pop_uint8()
             if bitmask & 4:  # skin URL
                 skin_url = buf.pop_null_str8()
-                if skin_url[0] is not ':':
-                    skin_url = ''
             else:  # no skin URL given
                 skin_url = ''
 
@@ -208,7 +206,7 @@ class Client(object):
                 self.world.create_cell(cid)
             cells[cid].update(
                 cid=cid, x=cx, y=cy, size=csize, name=cname, color=color,
-                is_virus=is_virus, is_agitated=is_agitated)
+                is_virus=is_virus, is_agitated=is_agitated, skin=skin_url)
 
         # also keep these non-updated cells
         for i in range(buf.pop_uint32()):

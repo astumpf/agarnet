@@ -13,10 +13,11 @@ class Cell(object):
         self.draw_alpha = 0.1
         self.name = ''
         self.spawn_time = time()
+        self.skin = str()
         self.update(*args, **kwargs)
 
     def update(self, cid=-1, x=0, y=0, size=0, name='',
-               color=(1, 0, 1), is_virus=False, is_agitated=False, cell=None):
+               color=(1, 0, 1), is_virus=False, is_agitated=False, skin=str(), cell=None):
         if cell:
             self.cid = copy(cell.cid)
             self.pos.set(cell.pos.x, cell.pos.y)
@@ -26,6 +27,7 @@ class Cell(object):
             self.color = copy(cell.color)
             self.is_virus = copy(cell.is_virus)
             self.is_agitated = copy(cell.is_agitated)
+            self.skin = copy(cell.skin)
         else:
             self.cid = cid
             self.pos.set(x, y)
@@ -35,6 +37,7 @@ class Cell(object):
             self.color = tuple(map(lambda rgb: rgb / 255.0, color))
             self.is_virus = is_virus
             self.is_agitated = is_agitated
+            self.skin = getattr(self, 'skin', skin) or skin
 
         # TODO: this update calculations are only called by new packets, but should be rather down by ui refresh
         if self.cid < 0:
