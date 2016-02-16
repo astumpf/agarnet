@@ -308,10 +308,17 @@ class Client(object):
         self.subscriber.on_own_id(cid=cid)
 
     def parse_world_rect(self, buf):  # world size
-        left = buf.pop_float64()
-        top = buf.pop_float64()
-        right = buf.pop_float64()
-        bottom = buf.pop_float64()
+        # workaround as world_rect packet seems to return field of view now
+        left = -7071.067811865476
+        top = -7071.067811865476
+        right = 7071.067811865476
+        bottom = 7071.067811865476
+
+        buf.pop_float64()
+        buf.pop_float64()
+        buf.pop_float64()
+        buf.pop_float64()
+        
         self.subscriber.on_world_rect(
             left=left, top=top, right=right, bottom=bottom)
         self.world.top_left = Vec(top, left)
