@@ -47,11 +47,24 @@ class Client(object):
         :param subscriber: class instance that implements any on_*() methods
         """
         self.subscriber = subscriber
+
+        # Gets updated with the new data when the server sends a packet.
         self.player = Player()
+
+        # The websocket instance used to connect to the server.
         self.ws = websocket.WebSocket()
+
+        # The most recent address used to connect to the server.
         self.address = ''
+
+        # The most recent token used to connect to the server.
         self.server_token = ''
+
+        # The most recent Facebook token sent to a server.
         self.facebook_token = ''
+
+        # `False` after connection, gets set to `True` when
+        # receiving a packet listed in `ingame_packets`.
         self.ingame = False
 
     @property
@@ -71,9 +84,11 @@ class Client(object):
         Connect the underlying websocket to the address,
         send a handshake and optionally a token packet.
 
+        Returns `True` if connected, `False` if the connection failed.
+
         :param address: string, `IP:PORT`
         :param token: unique token, required by official servers,
-                      acquired through find_server()
+                      acquired through utils.find_server()
         :return: True if connected, False if not
         """
         if self.connected:
@@ -110,31 +125,54 @@ class Client(object):
         return True
 
     def disconnect(self):
+        """
+        Disconnect from server.
+
+        Closes the websocket, sets `ingame = False`, and emits on_sock_closed.
+        """
         self.ws.close()
         self.ingame = False
         self.subscriber.on_sock_closed()
         # keep player/world data
 
     def listen(self):
-        """Set up a quick connection. Returns on disconnect."""
+        """
+        Set up a quick connection. Returns on disconnect.
+
+        After calling `connect()`, this waits for messages from the server
+        using `select`, and notifies the subscriber of any events.
+        """
         import select
         while self.connected:
             r, w, e = select.select((self.ws.sock, ), (), ())
             if r:
                 self.on_message()
             elif e:
-                self.subscriber.on_sock_error()
+                self.subscriber.on_sock_error(e)
         self.disconnect()
 
-    def on_message(self):
-        try:
-            msg = self.ws.recv()
-        except Exception:
-            self.disconnect()
-            return False
+    def on_message(self, msg=None):
+        """
+        Poll the websocket for a new packet.
+
+        `Client.listen()` calls this.
+
+        :param msg (string(byte array)): Optional. Parse the specified message
+            instead of receiving a packet from the socket.
+        """
+        if msg is None:
+            try:
+                msg = self.ws.recv()
+            except Exception as e:
+                self.subscriber.on_message_error(
+                    'Error while receiving packet: %s' % str(e))
+                self.disconnect()
+                return False
+
         if not msg:
             self.subscriber.on_message_error('Empty message received')
             return False
+
         buf = BufferStruct(msg)
         opcode = buf.pop_uint8()
         try:
@@ -142,30 +180,39 @@ class Client(object):
         except KeyError:
             self.subscriber.on_message_error('Unknown packet %s' % opcode)
             return False
+
         if not self.ingame and packet_name in ingame_packets:
             self.subscriber.on_ingame()
             self.ingame = True
+
         parser = getattr(self, 'parse_%s' % packet_name)
         try:
             parser(buf)
         except BufferUnderflowError as e:
             msg = 'Parsing %s packet failed: %s' % (packet_name, e.args[0])
             self.subscriber.on_message_error(msg)
+
         if len(buf.buffer) != 0:
             msg = 'Buffer not empty after parsing "%s" packet' % packet_name
             self.subscriber.on_message_error(msg)
-        return True
+
+        return packet_name
 
     def parse_world_update(self, buf):
         self.subscriber.on_world_update_pre()
 
-        # we keep the previous world state, so
-        # handlers can print names, check own_ids, ...
+        self.parse_cell_eating(buf)
+        self.parse_cell_updates(buf)
+        self.parse_cell_deletions(buf)
 
-        cells = self.player.world.cells
+        if self.player.is_alive:
+            self.player.cells_changed()
 
-        # ca eats cb
+        self.subscriber.on_world_update_post()
+
+    def parse_cell_eating(self, buf):
         for i in range(buf.pop_uint16()):
+            # ca eats cb
             ca = buf.pop_uint32()
             cb = buf.pop_uint32()
             self.subscriber.on_cell_eaten(eater_id=ca, eaten_id=cb)
@@ -174,10 +221,11 @@ class Client(object):
                     self.subscriber.on_death()
                     # do not clear all cells yet, they still get updated
                 self.player.own_ids.remove(cb)
-            if cb in cells:
+            if cb in self.player.world.cells:
                 self.subscriber.on_cell_removed(cid=cb)
-                del cells[cb]
+                del self.player.world.cells[cb]
 
+    def parse_cell_updates(self, buf):
         # create/update cells
         while 1:
             cid = buf.pop_uint32()
@@ -187,6 +235,7 @@ class Client(object):
             cy = buf.pop_int32()
             csize = buf.pop_int16()
             color = (buf.pop_uint8(), buf.pop_uint8(), buf.pop_uint8())
+
             bitmask = buf.pop_uint8()
             is_virus = bool(bitmask & 1)
             is_agitated = bool(bitmask & 16)
@@ -202,12 +251,17 @@ class Client(object):
             self.subscriber.on_cell_info(
                 cid=cid, x=cx, y=cy, size=csize, name=cname, color=color,
                 is_virus=is_virus, is_agitated=is_agitated)
-            if cid not in cells:
+            if cid not in self.player.world.cells:
                 self.world.create_cell(cid)
-            cells[cid].update(
+            self.player.world.cells[cid].update(
                 cid=cid, x=cx, y=cy, size=csize, name=cname, color=color,
                 is_virus=is_virus, is_agitated=is_agitated, skin=skin_url)
 
+            #if skin_url:  # TODO Cell.update() and on_cell_info got too bulky
+            #    self.subscriber.on_cell_skin(skin_url=skin_url)
+
+    def parse_cell_deletions(self, buf):
+        cells = self.player.world.cells
         # also keep these non-updated cells
         for i in range(buf.pop_uint32()):
             cid = buf.pop_uint32()
@@ -216,10 +270,6 @@ class Client(object):
                 del cells[cid]
                 if cid in self.player.own_ids:  # own cells joined
                     self.player.own_ids.remove(cid)
-
-        self.player.cells_changed()
-
-        self.subscriber.on_world_update_post()
 
     def parse_leaderboard_names(self, buf):
         # sent every 500ms
@@ -310,60 +360,110 @@ class Client(object):
     # f float32
     # d float64
 
-    def send_buffer(self, buf):
+    def send_struct(self, fmt, *data):
+        """
+        If connected, formats the data to a struct and sends it to the server.
+        Used internally by all other `send_*()` methods.
+        """
         if self.connected:
-            self.ws.send(buf.buffer)
-
-    def send_opcode(self, opcode):
-        self.send_buffer(BufferStruct(opcode=opcode))
+            self.ws.send(struct.pack(fmt, *data))
 
     def send_handshake(self):
-        buf = BufferStruct(opcode=254)
-        buf.push_uint32(5)
-        self.send_buffer(buf)
+        """
+        Used by `Client.connect()`.
 
-        buf = BufferStruct(opcode=255)
-        buf.push_uint32(handshake_version)
-        self.send_buffer(buf)
+        Tells the server which protocol to use.
+        Has to be sent before any other packets,
+        or the server will drop the connection when receiving any other packet.
+        """
+        self.send_struct('<BI', 254, 5)
+        self.send_struct('<BI', 255, handshake_version)
 
     def send_token(self, token):
-        buf = BufferStruct(opcode=80)
-        buf.push_end_str8(token)
-        self.send_buffer(buf)
+        """
+        Used by `Client.connect()`.
+
+        After connecting to an official server and sending the
+        handshake packets, the client has to send the token
+        acquired through `utils.find_server()`, otherwise the server will
+        drop the connection when receiving any other packet.
+        """
+        self.send_struct('<B%iB' % len(token), 80, *map(ord, token))
         self.server_token = token
 
     def send_facebook(self, token):
-        buf = BufferStruct(opcode=81)
-        buf.push_end_str8(token)
-        self.send_buffer(buf)
+        """
+        Tells the server which Facebook account this client uses.
+
+        After sending, the server takes some time to
+        get the data from Facebook.
+
+        Seems to be broken in recent versions of the game.
+        """
+        self.send_struct('<B%iB' % len(token), 81, *map(ord, token))
         self.facebook_token = token
 
     def send_respawn(self):
-        buf = BufferStruct(opcode=0)
-        buf.push_end_str16(self.player.nick)
-        self.send_buffer(buf)
+        """
+        Respawns the player.
+        """
+        nick = self.player.nick
+        self.send_struct('<B%iH' % len(nick), 0, *map(ord, nick))
 
     def send_target(self, x, y, cid=0):
-        buf = BufferStruct(opcode=16)
-        buf.push_int32(int(x))
-        buf.push_int32(int(y))
-        buf.push_uint32(cid)
-        self.send_buffer(buf)
+        """
+        Sets the target position of all cells.
+
+        `x` and `y` are world coordinates. They can exceed the world border.
+
+        For continuous movement, send a new target position
+        before the old one is reached.
+
+        In earlier versions of the game, it was possible to
+        control each cell individually by specifying the cell's `cid`.
+
+        Same as moving your mouse in the original client.
+        """
+        self.send_struct('<BiiI', 16, int(x), int(y), cid)
 
     def send_spectate(self):
-        self.send_opcode(1)
+        """
+        Puts the player into spectate mode.
+
+        The server then starts sending `spectate_update` packets
+        containing the center and size of the spectated area.
+        """
+        self.send_struct('<B', 1)
 
     def send_spectate_toggle(self):
-        self.send_opcode(18)
+        """
+        Toggles the spectate mode between following the largest player
+        and moving around freely.
+        """
+        self.send_struct('<B', 18)
 
     def send_split(self):
-        self.send_opcode(17)
+        """
+        Splits all controlled cells, while not exceeding 16 cells.
+
+        Same as pressing `Space` in the original client.
+        """
+        self.send_struct('<B', 17)
 
     def send_shoot(self):
-        self.send_opcode(21)
+        """
+        Ejects a pellet from all controlled cells.
+
+        Same as pressing `W` in the original client.
+        """
+        self.send_struct('<B', 21)
 
     def send_explode(self):
-        self.send_opcode(20)
+        """
+        In earlier versions of the game, sending this caused your cells
+        to split into lots of small cells and die.
+        """
+        self.send_struct('<B', 20)
         self.player.own_ids.clear()
         self.player.cells_changed()
         self.ingame = False
